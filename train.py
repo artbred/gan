@@ -87,8 +87,6 @@ def train(args):
     else:
         dataset = ImageFolder(root=data_root, transform=trans)
 
-    import sys
-    sys.exit((0))
    
     dataloader = iter(DataLoader(dataset, batch_size=batch_size, shuffle=False,
                       sampler=InfiniteSamplerWrapper(dataset), num_workers=dataloader_workers, pin_memory=True))
@@ -98,7 +96,6 @@ def train(args):
                                pin_memory=True)
     dataloader = CudaDataLoader(loader, 'cuda')
     '''
-    
     
     #from model_s import Generator, Discriminator
     netG = Generator(ngf=ngf, nz=nz, im_size=im_size)
@@ -132,12 +129,15 @@ def train(args):
         netD = nn.DataParallel(netD.to(device))
     
     for iteration in tqdm(range(current_iteration, total_iterations+1)):
-        real_image = next(dataloader)
+        real_image, txt_embedding = next(dataloader)
+
         real_image = real_image.to(device)
+        txt_embedding = txt_embedding.to(device)
+        
         current_batch_size = real_image.size(0)
         noise = torch.Tensor(current_batch_size, nz).normal_(0, 1).to(device)
 
-        fake_images = netG(noise)
+        fake_images = netG(noise, txt_embedding)
 
         real_image = DiffAugment(real_image, policy=policy)
         fake_images = [DiffAugment(fake, policy=policy) for fake in fake_images]

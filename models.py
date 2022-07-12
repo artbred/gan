@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from torch.nn.utils import spectral_norm
 import torch.nn.functional as F
-
+from torch.autograd import Variable
 import random
 
 seq = nn.Sequential
@@ -88,7 +88,7 @@ class InitLayer(nn.Module):
         super().__init__()
 
         self.init = nn.Sequential(
-                        convTranspose2d(nz, channel*2, 4, 1, 0, bias=False),
+                        convTranspose2d(nz*4, channel*2, 4, 1, 0, bias=False),
                         batchNorm2d(channel*2), GLU() )
 
     def forward(self, noise):
@@ -135,7 +135,7 @@ class CA_NET(nn.Module):
 
     def reparametrize(self, mu, logvar):
         std = logvar.mul(0.5).exp_()
-        eps = torch.cuda.FloatTensor(std.size()).normal_()
+        eps = torch.cuda.FloatTensor(std.size()).normal_() if torch.cuda.is_available() else torch.FloatTensor(std.size()).normal_()
         eps = Variable(eps)
         return eps.mul(std).add_(mu)
 
@@ -146,7 +146,7 @@ class CA_NET(nn.Module):
 
 
 class Generator(nn.Module):
-    def __init__(self, ngf=64, nz=100, nc=3, im_size=1024, t_dim=768, c_dim=768):
+    def __init__(self, ngf=64, nz=100, nc=3, im_size=1024, t_dim=768, c_dim=768, gf_dim=192, z_dim=100, ef_dim=128):
         super(Generator, self).__init__()
 
         nfc_multi = {4:16, 8:8, 16:4, 32:2, 64:2, 128:1, 256:0.5, 512:0.25, 1024:0.125}
@@ -155,6 +155,7 @@ class Generator(nn.Module):
             nfc[k] = int(v*ngf)
 
         self.im_size = im_size
+        self.gf_dim = gf_dim
 
         self.init = InitLayer(nz, channel=nfc[4])
                                 
@@ -178,11 +179,25 @@ class Generator(nn.Module):
         if im_size > 512:
             self.feat_1024 = UpBlock(nfc[512], nfc[1024])  
 
-        self.ca_net = CA_NET(t_dim, c_dim)
+        # ninput = z_dim + ef_dim
+        ninput = 1024
+
+        self.ca_net = CA_NET(t_dim, c_dim)  
+        self.fc = nn.Sequential(
+            nn.Linear(ninput, ngf * 4 * 4, bias=False),
+            nn.BatchNorm1d(ngf * 4 * 4),
+            nn.ReLU(True))
         
-    def forward(self, input):
-        
-        feat_4   = self.init(input)
+    def forward(self, input, text_embedding):
+        c_code, mu, logvar = self.ca_net(text_embedding)
+        z_c_code = torch.cat((input, c_code), 1)
+
+        h_code = self.fc(z_c_code)
+
+        # [2048, 4, 1, 1]
+        # h_code = h_code.view(-1, 4, 1, 1)
+
+        feat_4   = self.init(h_code)
         feat_8   = self.feat_8(feat_4)
         feat_16  = self.feat_16(feat_8)
         feat_32  = self.feat_32(feat_16)

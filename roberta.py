@@ -5,7 +5,8 @@ tokenizer = RobertaTokenizer.from_pretrained('roberta-base')
 model = RobertaModel.from_pretrained('roberta-base')
 
 def create_embedding(text):
-    text = text[:512]
-    encoded_input = tokenizer(text, return_tensors='pt')
-    output = model(**encoded_input)
-    return torch.squeeze(output.pooler_output, 0)
+    with torch.no_grad(): #я не понял что это означает до конца
+        text = text[:512]
+        encoded_input = tokenizer(text, return_tensors='pt')
+        output = model(**encoded_input)
+        return torch.squeeze(output.pooler_output, 0)

@@ -1,4 +1,4 @@
-import os
+import os, csv
 import numpy as np
 import torch
 import torch.utils.data as data
@@ -7,6 +7,8 @@ from PIL import Image
 from copy import deepcopy
 import shutil
 import json
+
+from roberta import create_embedding
 
 def InfiniteSampler(n):
     """Data sampler"""
@@ -64,44 +66,37 @@ def get_dir(args):
 class  ImageFolder(Dataset):
     """docstring for ArtDataset"""
     def __init__(self, root, transform=None):
-        super( ImageFolder, self).__init__()
+        super(ImageFolder, self).__init__()
         self.root = root
 
-        self.frame = self._parse_frame()
         self.transform = transform
-        self.csv = self.load_csv(path)
+        self.csv = self.parse_csv()
 
-    # def _parse_frame(self):
-    #     frame = []
-    #     img_names = os.listdir(self.root)
-    #     img_names.sort()
-    #     for i in range(len(img_names)):
-    #         image_path = os.path.join(self.root, img_names[i])
-    #         if image_path[-4:] == '.jpg' or image_path[-4:] == '.png' or image_path[-5:] == '.jpeg': 
-    #             frame.append(image_path)
-    #     return frame
-
-    def parse_csv(self, path):
+    def parse_csv(self):
         data = []
 
-        with open(path) as f:
+        with open(os.path.join(self.root, "data.csv")) as f:
             csv_reader = csv.reader(f, delimiter=',')
             for i, row in enumerate(csv_reader):
-                data.append(row)
+                if i >=1 :
+                    data.append(row)
 
         return data
 
     def __len__(self):
-        return len(self.frame)
+        return len(self.csv)
 
     def __getitem__(self, idx):
-        file = self.frame[idx]
+        logo = self.csv[idx]
+
+        file = f'{self.root}/logos/{logo[-1]}.png'
         img = Image.open(file).convert('RGB')
             
         if self.transform:
             img = self.transform(img) 
 
-        return img
+        embedding = create_embedding(self.csv[idx][1])
+        return img, embedding
 
 
 
