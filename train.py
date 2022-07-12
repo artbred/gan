@@ -137,7 +137,7 @@ def train(args):
         current_batch_size = real_image.size(0)
         noise = torch.Tensor(current_batch_size, nz).normal_(0, 1).to(device)
 
-        fake_images = netG(noise, txt_embedding)
+        fake_images, mu, logvar = netG(noise, txt_embedding)
 
         real_image = DiffAugment(real_image, policy=policy)
         fake_images = [DiffAugment(fake, policy=policy) for fake in fake_images]
@@ -163,16 +163,16 @@ def train(args):
         if iteration % 100 == 0:
             print("GAN: loss d: %.5f    loss g: %.5f"%(err_dr, -err_g.item()))
           
-        if iteration % (save_interval*10) == 0:
-            backup_para = copy_G_params(netG)
-            load_params(netG, avg_param_G)
-            with torch.no_grad():
-                vutils.save_image(netG(fixed_noise)[0].add(1).mul(0.5), saved_image_folder+'/%d.jpg'%iteration, nrow=4)
-                vutils.save_image( torch.cat([
-                        F.interpolate(real_image, 128), 
-                        rec_img_all, rec_img_small,
-                        rec_img_part]).add(1).mul(0.5), saved_image_folder+'/rec_%d.jpg'%iteration )
-            load_params(netG, backup_para)
+        # if iteration % (save_interval*10) == 0:
+        #     backup_para = copy_G_params(netG)
+        #     load_params(netG, avg_param_G)
+        #     with torch.no_grad():
+        #         vutils.save_image(netG(fixed_noise)[0].add(1).mul(0.5), saved_image_folder+'/%d.jpg'%iteration, nrow=4)
+        #         vutils.save_image( torch.cat([
+        #                 F.interpolate(real_image, 128), 
+        #                 rec_img_all, rec_img_small,
+        #                 rec_img_part]).add(1).mul(0.5), saved_image_folder+'/rec_%d.jpg'%iteration )
+        #     load_params(netG, backup_para)
 
         if iteration % (save_interval*50) == 0 or iteration == total_iterations:
             backup_para = copy_G_params(netG)

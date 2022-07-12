@@ -191,11 +191,7 @@ class Generator(nn.Module):
     def forward(self, input, text_embedding):
         c_code, mu, logvar = self.ca_net(text_embedding)
         z_c_code = torch.cat((input, c_code), 1)
-
         h_code = self.fc(z_c_code)
-
-        # [2048, 4, 1, 1]
-        # h_code = h_code.view(-1, 4, 1, 1)
 
         feat_4   = self.init(h_code)
         feat_8   = self.feat_8(feat_4)
@@ -220,7 +216,7 @@ class Generator(nn.Module):
         im_128 = torch.tanh(self.to_128(feat_128))
         im_1024 = torch.tanh(self.to_big(feat_1024))
 
-        return [im_1024, im_128]
+        return [im_1024, im_128], mu, logvar
 
 
 class DownBlock(nn.Module):
