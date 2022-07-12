@@ -69,16 +69,27 @@ class  ImageFolder(Dataset):
 
         self.frame = self._parse_frame()
         self.transform = transform
+        self.csv = self.load_csv(path)
 
-    def _parse_frame(self):
-        frame = []
-        img_names = os.listdir(self.root)
-        img_names.sort()
-        for i in range(len(img_names)):
-            image_path = os.path.join(self.root, img_names[i])
-            if image_path[-4:] == '.jpg' or image_path[-4:] == '.png' or image_path[-5:] == '.jpeg': 
-                frame.append(image_path)
-        return frame
+    # def _parse_frame(self):
+    #     frame = []
+    #     img_names = os.listdir(self.root)
+    #     img_names.sort()
+    #     for i in range(len(img_names)):
+    #         image_path = os.path.join(self.root, img_names[i])
+    #         if image_path[-4:] == '.jpg' or image_path[-4:] == '.png' or image_path[-5:] == '.jpeg': 
+    #             frame.append(image_path)
+    #     return frame
+
+    def parse_csv(self, path):
+        data = []
+
+        with open(path) as f:
+            csv_reader = csv.reader(f, delimiter=',')
+            for i, row in enumerate(csv_reader):
+                data.append(row)
+
+        return data
 
     def __len__(self):
         return len(self.frame)

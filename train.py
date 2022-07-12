@@ -14,9 +14,10 @@ from models import weights_init, Discriminator, Generator
 from operation import copy_G_params, load_params, get_dir
 from operation import ImageFolder, InfiniteSamplerWrapper
 from diffaug import DiffAugment
-policy = 'color,translation'
 import lpips
-percept = lpips.PerceptualLoss(model='net-lin', net='vgg', use_gpu=True)
+
+policy = 'color,translation'
+percept = lpips.PerceptualLoss(model='net-lin', net='vgg', use_gpu=True if torch.cuda.is_available() else False)
 
 
 #torch.backends.cudnn.benchmark = True
@@ -63,23 +64,21 @@ def train(args):
     nz = 256
     nlr = 0.0002
     nbeta1 = 0.5
-    use_cuda = True
-    multi_gpu = True
+    multi_gpu = False
     dataloader_workers = 8
     current_iteration = args.start_iter
     save_interval = 100
     saved_model_folder, saved_image_folder = get_dir(args)
     
-    device = torch.device("cpu")
-    if use_cuda:
-        device = torch.device("cuda:0")
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     transform_list = [
-            transforms.Resize((int(im_size),int(im_size))),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
-        ]
+        transforms.Resize((int(im_size),int(im_size))),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
+    ]
+
     trans = transforms.Compose(transform_list)
     
     if 'lmdb' in data_root:
@@ -88,6 +87,8 @@ def train(args):
     else:
         dataset = ImageFolder(root=data_root, transform=trans)
 
+    import sys
+    sys.exit((0))
    
     dataloader = iter(DataLoader(dataset, batch_size=batch_size, shuffle=False,
                       sampler=InfiniteSamplerWrapper(dataset), num_workers=dataloader_workers, pin_memory=True))
@@ -187,7 +188,7 @@ def train(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='region gan')
 
-    parser.add_argument('--path', type=str, default='../lmdbs/art_landscape_1k', help='path of resource dataset, should be a folder that has one or many sub image folders inside')
+    parser.add_argument('--path', type=str, default='./dataset', help='path of resource dataset, should be a folder that has one or many sub image folders inside')
     parser.add_argument('--cuda', type=int, default=0, help='index of gpu to use')
     parser.add_argument('--name', type=str, default='test1', help='experiment name')
     parser.add_argument('--iter', type=int, default=50000, help='number of iterations')
@@ -196,7 +197,7 @@ if __name__ == "__main__":
     parser.add_argument('--im_size', type=int, default=1024, help='image resolution')
     parser.add_argument('--ckpt', type=str, default='None', help='checkpoint weight path if have one')
     parser.add_argument('--t-dim', type=int, default=768)
-    parser.add_argument('--t-dim', type=int, default=768)
+    parser.add_argument('--c-dim', type=int, default=128)
 
     args = parser.parse_args()
     print(args)
