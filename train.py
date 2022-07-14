@@ -20,7 +20,10 @@ policy = 'color,translation'
 percept = lpips.PerceptualLoss(model='net-lin', net='vgg', use_gpu=True if torch.cuda.is_available() else False)
 
 
-#torch.backends.cudnn.benchmark = True
+def KL_loss(mu, logvar):
+    KLD_element = mu.pow(2).add_(logvar.exp()).mul_(-1).add_(1).add_(logvar)
+    KLD = torch.mean(KLD_element).mul_(-0.5)
+    return KLD
 
 
 def crop_image_by_part(image, part):
@@ -68,6 +71,7 @@ def train(args):
     dataloader_workers = 8
     current_iteration = args.start_iter
     save_interval = 100
+    kl_cf = args.kl
     saved_model_folder, saved_image_folder = get_dir(args)
     
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -154,14 +158,17 @@ def train(args):
         pred_g = netD(fake_images, "fake")
         err_g = -pred_g.mean()
 
-        err_g.backward()
+        kl_loss = KL_loss(mu, logvar)
+        errG_total = errG + kl_loss * kl_cf
+
+        errG_total.backward()
         optimizerG.step()
 
         for p, avg_p in zip(netG.parameters(), avg_param_G):
             avg_p.mul_(0.999).add_(0.001 * p.data)
 
         if iteration % 100 == 0:
-            print("GAN: loss d: %.5f    loss g: %.5f"%(err_dr, -err_g.item()))
+            print("GAN: loss d: %.5f    loss g: %.5f"%(err_dr, -errG_total.item()))
           
         # if iteration % (save_interval*10) == 0:
         #     backup_para = copy_G_params(netG)
@@ -198,6 +205,7 @@ if __name__ == "__main__":
     parser.add_argument('--ckpt', type=str, default='None', help='checkpoint weight path if have one')
     parser.add_argument('--t-dim', type=int, default=768)
     parser.add_argument('--c-dim', type=int, default=128)
+    parser.add_argument('--kl', type=float, default=2.0)
 
     args = parser.parse_args()
     print(args)
