@@ -146,7 +146,7 @@ class CA_NET(nn.Module):
 
 
 class Generator(nn.Module):
-    def __init__(self, ngf=64, nz=100, nc=3, im_size=1024, t_dim=768, c_dim=128, gf_dim=192, z_dim=100, ef_dim=128):
+    def __init__(self, ngf=64, nz=100, nc=3, im_size=1024, t_dim=768, c_dim=768, gf_dim=192, z_dim=100, ef_dim=128):
         super(Generator, self).__init__()
 
         nfc_multi = {4:16, 8:8, 16:4, 32:2, 64:2, 128:1, 256:0.5, 512:0.25, 1024:0.125}
