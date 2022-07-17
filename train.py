@@ -16,6 +16,8 @@ from operation import ImageFolder, InfiniteSamplerWrapper
 from diffaug import DiffAugment
 import lpips
 
+from torch.autograd import Variable
+
 policy = 'color,translation'
 percept = lpips.PerceptualLoss(model='net-lin', net='vgg', use_gpu=True if torch.cuda.is_available() else False)
 
@@ -37,7 +39,7 @@ def crop_image_by_part(image, part):
     if part==3:
         return image[:,:,hw:,hw:]
 
-def train_d(net, data,label="real"):
+def train_d(net, data, label="real"):
     """Train function of discriminator"""
     if label=="real":
         part = random.randint(0, 3)
@@ -147,20 +149,26 @@ def train(args):
         ## 2. train Discriminator
         netD.zero_grad()
 
-        err_dr, rec_img_all, rec_img_small, rec_img_part = train_d(netD, real_image, label="real")
-        err_df, _, _, _ = train_d(netD, [fi.detach() for fi in fake_images], label="fake")
+        err_dr, _, _, _, _ = train_d(netD, real_image, label="real")
+        err_df, _ = train_d(netD, [fi.detach() for fi in fake_images], label="fake")
 
         criterion = nn.BCELoss()
         cond = mu.detach()
-        fake = fake_imgs.detach()
 
-        real_features = netD(real_img)
-        fake_features = netD(fake_images)
+        part = random.randint(0, 3)
+
+        real_features = netD(real_image, label="real", part=part)
+        fake_features = netD([fi.detach() for fi in fake_images], label="fake")
+
+        real_labels = Variable(torch.FloatTensor(current_batch_size).fill_(1))
+        fake_labels = Variable(torch.FloatTensor(current_batch_size).fill_(0))
+
+        real_labels, fake_labels = real_labels.to(device), fake_labels.to(device)
         
         real_logits = netD.get_cond_logits(real_features, cond)
         errD_real = criterion(real_logits, real_labels)
        
-        wrong_logits = netD.get_cond_logits(real_features[:(batch_size-1)], cond[1:])
+        wrong_logits = netD.get_cond_logits(real_features[:(current_batch_size-1)], cond[1:])
         errD_wrong = criterion(wrong_logits, fake_labels[1:])
         
         fake_logits = netD.get_cond_logits(fake_features, cond)

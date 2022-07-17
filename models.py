@@ -96,6 +96,11 @@ class InitLayer(nn.Module):
         return self.init(noise)
 
 
+def conv3x3(in_planes, out_planes, stride=1):
+    "3x3 convolution with padding"
+    return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
+                     padding=1, bias=False)
+
 class D_GET_LOGITS(nn.Module):
     def __init__(self, ndf=64, nef=128, bcondition=True):
         super(D_GET_LOGITS, self).__init__()
@@ -117,12 +122,12 @@ class D_GET_LOGITS(nn.Module):
     def forward(self, h_code, c_code=None):
         # conditioning output
         if self.bcondition and c_code is not None:
-            c_code = c_code.view(-1, self.ef_dim, 1, 1)
+            c_code = c_code.reshape(-1, self.ef_dim, 1, 1)
             c_code = c_code.repeat(1, 1, 4, 4)
             # state size (ngf+egf) x 4 x 4
-            h_c_code = torch.cat((h_code, c_code), 1)
+            h_c_code = torch.cat((h_code[0], c_code), 1)
         else:
-            h_c_code = h_code
+            h_c_code = h_code[0]
 
         output = self.outlogits(h_c_code)
         return output.view(-1)
