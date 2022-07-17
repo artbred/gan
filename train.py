@@ -37,7 +37,7 @@ def crop_image_by_part(image, part):
     if part==3:
         return image[:,:,hw:,hw:]
 
-def train_d(net, data, label="real"):
+def train_d(net, data,label="real"):
     """Train function of discriminator"""
     if label=="real":
         part = random.randint(0, 3)
@@ -46,13 +46,11 @@ def train_d(net, data, label="real"):
             percept( rec_all, F.interpolate(data, rec_all.shape[2]) ).sum() +\
             percept( rec_small, F.interpolate(data, rec_small.shape[2]) ).sum() +\
             percept( rec_part, F.interpolate(crop_image_by_part(data, part), rec_part.shape[2]) ).sum()
-        err.backward()
-        return pred.mean().item(), rec_all, rec_small, rec_part
+        return err, pred.mean().item(), rec_all, rec_small, rec_part
     else:
         pred = net(data, label)
         err = F.relu( torch.rand_like(pred) * 0.2 + 0.8 + pred).mean()
-        err.backward()
-        return pred.mean().item()
+        return err, pred.mean().item()
         
 
 def train(args):
@@ -141,7 +139,7 @@ def train(args):
         current_batch_size = real_image.size(0)
         noise = torch.Tensor(current_batch_size, nz).normal_(0, 1).to(device)
 
-        fake_images, mu, logvar = netG(noise, txt_embedding)
+        fake_images, mu, logvar, h_code = netG(noise, txt_embedding)
 
         real_image = DiffAugment(real_image, policy=policy)
         fake_images = [DiffAugment(fake, policy=policy) for fake in fake_images]
@@ -150,7 +148,27 @@ def train(args):
         netD.zero_grad()
 
         err_dr, rec_img_all, rec_img_small, rec_img_part = train_d(netD, real_image, label="real")
-        train_d(netD, [fi.detach() for fi in fake_images], label="fake")
+        err_df, _, _, _ = train_d(netD, [fi.detach() for fi in fake_images], label="fake")
+
+        criterion = nn.BCELoss()
+        cond = mu.detach()
+        fake = fake_imgs.detach()
+
+        real_features = netD(real_img)
+        fake_features = netD(fake_images)
+        
+        real_logits = netD.get_cond_logits(real_features, cond)
+        errD_real = criterion(real_logits, real_labels)
+       
+        wrong_logits = netD.get_cond_logits(real_features[:(batch_size-1)], cond[1:])
+        errD_wrong = criterion(wrong_logits, fake_labels[1:])
+        
+        fake_logits = netD.get_cond_logits(fake_features, cond)
+        errD_fake = criterion(fake_logits, fake_labels)
+
+        errD = errD_real + (errD_fake + errD_wrong) * 0.5 + err_dr + err_df # как тут правильно сделать?
+
+        errD.backward()
         optimizerD.step()
         
         ## 3. train Generator

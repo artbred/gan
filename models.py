@@ -96,6 +96,37 @@ class InitLayer(nn.Module):
         return self.init(noise)
 
 
+class D_GET_LOGITS(nn.Module):
+    def __init__(self, ndf=64, nef=128, bcondition=True):
+        super(D_GET_LOGITS, self).__init__()
+        self.df_dim = ndf
+        self.ef_dim = nef
+        self.bcondition = bcondition
+        if bcondition:
+            self.outlogits = nn.Sequential(
+                conv3x3(ndf * 8 + nef, ndf * 8),
+                nn.BatchNorm2d(ndf * 8),
+                nn.LeakyReLU(0.2, inplace=True),
+                nn.Conv2d(ndf * 8, 1, kernel_size=4, stride=4),
+                nn.Sigmoid())
+        else:
+            self.outlogits = nn.Sequential(
+                nn.Conv2d(ndf * 8, 1, kernel_size=4, stride=4),
+                nn.Sigmoid())
+
+    def forward(self, h_code, c_code=None):
+        # conditioning output
+        if self.bcondition and c_code is not None:
+            c_code = c_code.view(-1, self.ef_dim, 1, 1)
+            c_code = c_code.repeat(1, 1, 4, 4)
+            # state size (ngf+egf) x 4 x 4
+            h_c_code = torch.cat((h_code, c_code), 1)
+        else:
+            h_c_code = h_code
+
+        output = self.outlogits(h_c_code)
+        return output.view(-1)
+
 def UpBlock(in_planes, out_planes):
     block = nn.Sequential(
         nn.Upsample(scale_factor=2, mode='nearest'),
@@ -216,7 +247,7 @@ class Generator(nn.Module):
         im_128 = torch.tanh(self.to_128(feat_128))
         im_1024 = torch.tanh(self.to_big(feat_1024))
 
-        return [im_1024, im_128], mu, logvar
+        return [im_1024, im_128], mu, logvar, h_code
 
 
 class DownBlock(nn.Module):
@@ -306,6 +337,9 @@ class Discriminator(nn.Module):
         self.decoder_big = SimpleDecoder(nfc[16], nc)
         self.decoder_part = SimpleDecoder(nfc[32], nc)
         self.decoder_small = SimpleDecoder(nfc[32], nc)
+
+        self.get_cond_logits = D_GET_LOGITS()
+        self.get_uncond_logits = None
         
     def forward(self, imgs, label, part=None):
         if type(imgs) is not list:
