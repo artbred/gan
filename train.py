@@ -159,7 +159,7 @@ def train(args):
         err_g = -pred_g.mean()
 
         kl_loss = KL_loss(mu, logvar)
-        errG_total = err_g + kl_loss * kl_cf
+        errG_total = errG + kl_loss * kl_cf
 
         errG_total.backward()
         optimizerG.step()
@@ -204,7 +204,7 @@ if __name__ == "__main__":
     parser.add_argument('--im_size', type=int, default=1024, help='image resolution')
     parser.add_argument('--ckpt', type=str, default='None', help='checkpoint weight path if have one')
     parser.add_argument('--t-dim', type=int, default=768)
-    parser.add_argument('--c-dim', type=int, default=768)
+    parser.add_argument('--c-dim', type=int, default=128)
     parser.add_argument('--kl', type=float, default=2.0)
 
     args = parser.parse_args()
