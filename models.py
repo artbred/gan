@@ -18,6 +18,18 @@ def weights_init(m):
         m.weight.data.normal_(1.0, 0.02)
         m.bias.data.fill_(0)
 
+def weights_init_text(m):
+    classname = m.__class__.__name__
+    if classname.find('Conv') != -1:
+        m.weight.data.normal_(0.0, 0.02)
+    elif classname.find('BatchNorm') != -1:
+        m.weight.data.normal_(1.0, 0.02)
+        m.bias.data.fill_(0)
+    elif classname.find('Linear') != -1:
+        m.weight.data.normal_(0.0, 0.02)
+        if m.bias is not None:
+            m.bias.data.fill_(0.0)
+
 def conv2d(*args, **kwargs):
     return spectral_norm(nn.Conv2d(*args, **kwargs))
 
@@ -146,7 +158,7 @@ class CA_NET(nn.Module):
 
 
 class Generator(nn.Module):
-    def __init__(self, ngf=64, nz=100, nc=3, im_size=1024, t_dim=768, c_dim=128, gf_dim=192, z_dim=100, ef_dim=128):
+    def __init__(self, ngf=64, nz=100, nc=3, im_size=1024, t_dim=768, c_dim=768, gf_dim=192, z_dim=100, ef_dim=128):
         super(Generator, self).__init__()
 
         nfc_multi = {4:16, 8:8, 16:4, 32:2, 64:2, 128:1, 256:0.5, 512:0.25, 1024:0.125}
@@ -347,9 +359,9 @@ class Discriminator(nn.Module):
             if part==3:
                 rec_img_part = self.decoder_part(feat_32[:,:,8:,8:])
 
-            return torch.cat([rf_0, rf_1]) , [rec_img_big, rec_img_small, rec_img_part]
+            return feat_16, torch.cat([rf_0, rf_1]) , [rec_img_big, rec_img_small, rec_img_part]
 
-        return torch.cat([rf_0, rf_1]) 
+        return feat_16, torch.cat([rf_0, rf_1]) 
 
 
 class SimpleDecoder(nn.Module):
@@ -422,3 +434,76 @@ class TextureDiscriminator(nn.Module):
             return rf, rec_img_small, img
 
         return rf
+
+
+def conv3x3(in_planes, out_planes, stride=1):
+    "3x3 convolution with padding"
+    return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
+                     padding=1, bias=False)
+
+class D_GET_LOGITS(nn.Module):
+    def __init__(self, ndf, nef, bcondition=True):
+        super(D_GET_LOGITS, self).__init__()
+        self.df_dim = ndf
+        self.ef_dim = nef
+        self.bcondition = bcondition
+        if bcondition:
+            self.outlogits = nn.Sequential(
+                conv3x3(ndf * 8 + nef, ndf * 8),
+                nn.BatchNorm2d(ndf * 8),
+                nn.LeakyReLU(0.2, inplace=True),
+                nn.Conv2d(ndf * 8, 1, kernel_size=4, stride=4),
+                nn.Sigmoid())
+        else:
+            self.outlogits = nn.Sequential(
+                nn.Conv2d(ndf * 8, 1, kernel_size=4, stride=4),
+                nn.Sigmoid())
+
+    def forward(self, h_code, c_code=None):
+        # conditioning output
+        if self.bcondition and c_code is not None:
+            c_code = c_code.view(-1, self.ef_dim, 1, 1)
+            c_code = c_code.repeat(1, 1, 4, 4)
+            # state size (ngf+egf) x 4 x 4
+            h_c_code = torch.cat((h_code, c_code), 1)
+        else:
+            h_c_code = h_code
+
+        output = self.outlogits(h_c_code)
+        return output.view(-1)
+
+
+class DiscriminatorText(nn.Module):
+    def __init__(self, df_dim=96, ef_dim=128):
+        super(DiscriminatorText, self).__init__()
+        self.df_dim = df_dim
+        self.ef_dim = ef_dim
+        self.define_module()
+
+    def define_module(self):
+        ndf, nef = self.df_dim, self.ef_dim
+        self.encode_img = nn.Sequential(
+            nn.Conv2d(3, ndf, 4, 2, 1, bias=False),
+            nn.LeakyReLU(0.2, inplace=True),
+            # state size. (ndf) x 32 x 32
+            nn.Conv2d(ndf, ndf * 2, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ndf * 2),
+            nn.LeakyReLU(0.2, inplace=True),
+            # state size (ndf*2) x 16 x 16
+            nn.Conv2d(ndf*2, ndf * 4, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ndf * 4),
+            nn.LeakyReLU(0.2, inplace=True),
+            # state size (ndf*4) x 8 x 8
+            nn.Conv2d(ndf*4, ndf * 8, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ndf * 8),
+            # state size (ndf * 8) x 4 x 4)
+            nn.LeakyReLU(0.2, inplace=True)
+        )
+
+        self.get_cond_logits = D_GET_LOGITS(ndf, nef)
+        self.get_uncond_logits = None
+
+    def forward(self, image):
+        img_embedding = self.encode_img(image)
+
+        return img_embedding
