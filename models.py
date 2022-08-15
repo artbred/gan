@@ -462,10 +462,11 @@ class D_GET_LOGITS(nn.Module):
     def forward(self, h_code, c_code=None):
         # conditioning output
         if self.bcondition and c_code is not None:
-            c_code = c_code.view(-1, self.ef_dim, 1, 1)
+            c_code = c_code.reshape(-1, self.ef_dim, 1, 1)
             c_code = c_code.repeat(1, 1, 4, 4)
             # state size (ngf+egf) x 4 x 4
             h_c_code = torch.cat((h_code, c_code), 1)
+
         else:
             h_c_code = h_code
 
@@ -482,8 +483,9 @@ class DiscriminatorText(nn.Module):
 
     def define_module(self):
         ndf, nef = self.df_dim, self.ef_dim
+        input_channels = 128
         self.encode_img = nn.Sequential(
-            nn.Conv2d(3, ndf, 4, 2, 1, bias=False),
+            nn.Conv2d(input_channels, ndf, 4, 2, 1, bias=False),
             nn.LeakyReLU(0.2, inplace=True),
             # state size. (ndf) x 32 x 32
             nn.Conv2d(ndf, ndf * 2, 4, 2, 1, bias=False),
@@ -504,6 +506,6 @@ class DiscriminatorText(nn.Module):
         self.get_uncond_logits = None
 
     def forward(self, image):
-        img_embedding = self.encode_img(image)
+        img_embedding = self.encode_img(image.unsqueeze(0))
 
         return img_embedding

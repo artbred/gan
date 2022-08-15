@@ -69,14 +69,13 @@ def train_d(net, data, label="real"):
             percept( rec_all, F.interpolate(data, rec_all.shape[2]) ).sum() +\
             percept( rec_small, F.interpolate(data, rec_small.shape[2]) ).sum() +\
             percept( rec_part, F.interpolate(crop_image_by_part(data, part), rec_part.shape[2]) ).sum()
-        err.backward()
-        return feat_16, pred.mean().item(), rec_all, rec_small, rec_part
+        return err, feat_16
+        #return  err, feat_16, pred.mean().item(), rec_all, rec_small, rec_part
     else:
         feat_16, pred = net(data, label)
         err = F.relu( torch.rand_like(pred) * 0.2 + 0.8 + pred).mean()
-        err.backward()
 
-        return feat_16, pred.mean().item()
+        return err, feat_16
         
 
 def train(args):
@@ -142,8 +141,8 @@ def train(args):
     avg_param_G = copy_G_params(netG)
 
     fixed_noise = torch.FloatTensor(8, nz).normal_(0, 1).to(device)
-    real_labels = Variable(torch.FloatTensor(batch_size).fill_(1)).to(device)
-    fake_labels = Variable(torch.FloatTensor(batch_size).fill_(0)).to(device)
+    real_labels = Variable(torch.FloatTensor(args.batch_size).fill_(1)).to(device)
+    fake_labels = Variable(torch.FloatTensor(args.batch_size).fill_(0)).to(device)
     
     optimizerG = optim.Adam(netG.parameters(), lr=nlr, betas=(nbeta1, 0.999))
     optimizerD = optim.Adam(netD.parameters(), lr=nlr, betas=(nbeta1, 0.999))
@@ -180,15 +179,17 @@ def train(args):
         ## 2. train Discriminator
         netD.zero_grad()
 
-        feat_16_real, err_dr, rec_img_all, rec_img_small, rec_img_part = train_d(netD, real_image, label="real")
-        feat_16_fake = train_d(netD, [fi.detach() for fi in fake_images], label="fake")
+        errDReal, feat_16_real = train_d(netD, real_image, label="real")
+        errDFake, feat_16_fake = train_d(netD, [fi.detach() for fi in fake_images], label="fake")
 
+        errDReal.backward()
+        errDFake.backward()
         optimizerD.step()
         
         ## 3. train text Discriminator
         netDText.zero_grad()
 
-        errD = compute_text_discriminator_loss(netDText, real_image, feat_16_fake[0], real_labels, fake_labels, mu)
+        errD = compute_text_discriminator_loss(netDText, feat_16_real[0], feat_16_fake[0], real_labels, fake_labels, mu)
         errD.backward()
 
         optimizerDText.step()
