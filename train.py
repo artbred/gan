@@ -64,18 +64,18 @@ def train_d(net, data, label="real"):
     """Train function of discriminator"""
     if label=="real":
         part = random.randint(0, 3)
-        feat_16, pred, [rec_all, rec_small, rec_part] = net(data, label, part=part)
+        feat, pred, [rec_all, rec_small, rec_part] = net(data, label, part=part)
         err = F.relu(  torch.rand_like(pred) * 0.2 + 0.8 -  pred).mean() + \
             percept( rec_all, F.interpolate(data, rec_all.shape[2]) ).sum() +\
             percept( rec_small, F.interpolate(data, rec_small.shape[2]) ).sum() +\
             percept( rec_part, F.interpolate(crop_image_by_part(data, part), rec_part.shape[2]) ).sum()
-        return err, feat_16
+        return err, feat
         #return  err, feat_16, pred.mean().item(), rec_all, rec_small, rec_part
     else:
-        feat_16, pred = net(data, label)
+        feat, pred = net(data, label)
         err = F.relu( torch.rand_like(pred) * 0.2 + 0.8 + pred).mean()
 
-        return err, feat_16
+        return err, feat
         
 
 def train(args):
@@ -179,8 +179,8 @@ def train(args):
         ## 2. train Discriminator
         netD.zero_grad()
 
-        errDReal, feat_16_real = train_d(netD, real_image, label="real")
-        errDFake, feat_16_fake = train_d(netD, [fi.detach() for fi in fake_images], label="fake")
+        errDReal, feat_real = train_d(netD, real_image, label="real")
+        errDFake, feat_fake = train_d(netD, [fi.detach() for fi in fake_images], label="fake")
 
         errDReal.backward()
         errDFake.backward()
@@ -189,7 +189,7 @@ def train(args):
         ## 3. train text Discriminator
         netDText.zero_grad()
 
-        errD = compute_text_discriminator_loss(netDText, feat_16_real[0], feat_16_fake[0], real_labels, fake_labels, mu)
+        errD, _, _ = compute_text_discriminator_loss(netDText, feat_real, feat_fake, real_labels, fake_labels, mu)
         errD.backward()
 
         optimizerDText.step()
