@@ -456,7 +456,7 @@ class D_GET_LOGITS(nn.Module):
                 nn.Sigmoid())
         else:
             self.outlogits = nn.Sequential(
-                nn.Conv2d(ndf * 8, 1, kernel_size=4, stride=4),
+                nn.Conv2d(ndf * 8 + nef, 1, kernel_size=4, stride=4),
                 nn.Sigmoid())
 
     def forward(self, h_code, c_code=None):
@@ -467,7 +467,7 @@ class D_GET_LOGITS(nn.Module):
             # state size (ngf+egf) x 4 x 4
             h_c_code = torch.cat((h_code, c_code), 1)
         else:
-            h_c_code = h_code
+            h_c_code = h_code[0]
 
         output = self.outlogits(h_c_code)
         return output.view(-1)
@@ -502,7 +502,7 @@ class DiscriminatorText(nn.Module):
         )
 
         self.get_cond_logits = D_GET_LOGITS(ndf, 768)
-        self.get_uncond_logits = None
+        self.get_uncond_logits = D_GET_LOGITS(ndf, 768, bcondition=False)
 
     def forward(self, image):
         img_embedding = self.encode_img(image)

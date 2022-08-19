@@ -27,13 +27,28 @@ def KL_loss(mu, logvar):
     KLD = torch.mean(KLD_element).mul_(-0.5)
     return KLD
 
+def compute_generator_loss(netD, fake_imgs, real_labels, conditions):
+    criterion = nn.BCELoss()
+    cond = conditions.detach()
+    fake_features = netD(fake_imgs)
+    
+    inputs = (fake_features, cond)
+    fake_logits = netD.get_cond_logits(inputs)
+    errD_fake = criterion(fake_logits, real_labels)
+
+    if netD.get_uncond_logits is not None:
+        fake_logits = netD.get_uncond_logits(fake_features)
+        uncond_errD_fake = criterion(fake_logits, real_labels)
+        errD_fake += uncond_errD_fake
+    
+    return errD_fake
+
 def compute_text_discriminator_loss(netD, real_imgs, fake_imgs, real_labels, fake_labels, conditions):
     criterion = nn.BCELoss()
     batch_size = real_imgs.size(0)
     cond = conditions.detach()
-    fake = fake_imgs.detach()
     real_features = netD(real_imgs)
-    fake_features = netD(fake)
+    fake_features = netD(fake_imgs)
 
     # real pairs
     inputs = (real_features, cond)
@@ -187,20 +202,21 @@ def train(args):
         optimizerD.step()
         
         ## 3. train text Discriminator
+        netD.zero_grad()
         netDText.zero_grad()
 
-        errD, _, _ = compute_text_discriminator_loss(netDText, feat_real, feat_fake, real_labels, fake_labels, mu)
+        errD, _, _ = compute_text_discriminator_loss(netDText, feat_real.detach(), feat_fake.detach(), real_labels, fake_labels, mu)
         errD.backward()
 
         optimizerDText.step()
 
         ## 4. train Generator
         netG.zero_grad()
-        pred_g = netD(fake_images, "fake")
+        _, pred_g = netD(fake_images, "fake") + compute_generator_loss(netDText, feat_fake.detach(), real_labels, mu)
         err_g = -pred_g.mean()
-
+        
         kl_loss = KL_loss(mu, logvar)
-        errG_total = errG + kl_loss * kl_cf
+        errG_total = err_g + kl_loss * kl_cf
 
         errG_total.backward()
         optimizerG.step()
@@ -208,8 +224,8 @@ def train(args):
         for p, avg_p in zip(netG.parameters(), avg_param_G):
             avg_p.mul_(0.999).add_(0.001 * p.data)
 
-        if iteration % 100 == 0:
-            print("GAN: loss d: %.5f    loss g: %.5f"%(err_dr, -errG_total.item()))
+        # if iteration % 100 == 0:
+        #     print("GAN: loss d: %.5f    loss g: %.5f"%(err_dr, -errG_total.item()))
           
         # if iteration % (save_interval*10) == 0:
         #     backup_para = copy_G_params(netG)
