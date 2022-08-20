@@ -32,8 +32,7 @@ def compute_generator_loss(netD, fake_imgs, real_labels, conditions):
     cond = conditions.detach()
     fake_features = netD(fake_imgs)
     
-    inputs = (fake_features, cond)
-    fake_logits = netD.get_cond_logits(inputs)
+    fake_logits = netD.get_cond_logits(fake_features, cond)
     errD_fake = criterion(fake_logits, real_labels)
 
     if netD.get_uncond_logits is not None:
@@ -212,9 +211,13 @@ def train(args):
 
         ## 4. train Generator
         netG.zero_grad()
-        _, pred_g = netD(fake_images, "fake") + compute_generator_loss(netDText, feat_fake.detach(), real_labels, mu)
+
+        _, pred_g = netD(fake_images, "fake")
+        err_fake_text_d = compute_generator_loss(netDText, feat_fake.detach(), real_labels, mu)    
+
+        pred_g += err_fake_text_d
+
         err_g = -pred_g.mean()
-        
         kl_loss = KL_loss(mu, logvar)
         errG_total = err_g + kl_loss * kl_cf
 

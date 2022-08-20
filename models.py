@@ -467,7 +467,7 @@ class D_GET_LOGITS(nn.Module):
             # state size (ngf+egf) x 4 x 4
             h_c_code = torch.cat((h_code, c_code), 1)
         else:
-            h_c_code = h_code[0]
+            h_c_code = h_code
 
         output = self.outlogits(h_c_code)
         return output.view(-1)
