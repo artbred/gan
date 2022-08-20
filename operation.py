@@ -95,8 +95,10 @@ class  ImageFolder(Dataset):
         if self.transform:
             img = self.transform(img) 
 
+        text = self.csv[idx][0] + ", " + self.csv[idx][1]
+
         embedding = create_embedding(self.csv[idx][1])
-        return img, embedding
+        return img, embedding, text
 
 
 

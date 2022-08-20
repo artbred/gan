@@ -456,7 +456,7 @@ class D_GET_LOGITS(nn.Module):
                 nn.Sigmoid())
         else:
             self.outlogits = nn.Sequential(
-                nn.Conv2d(ndf * 8 + nef, 1, kernel_size=4, stride=4),
+                nn.Conv2d(ndf * 8, 1, kernel_size=4, stride=4),
                 nn.Sigmoid())
 
     def forward(self, h_code, c_code=None):

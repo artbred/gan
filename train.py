@@ -178,7 +178,7 @@ def train(args):
         netD = nn.DataParallel(netD.to(device))
     
     for iteration in tqdm(range(current_iteration, total_iterations+1)):
-        real_image, txt_embedding = next(dataloader)
+        real_image, txt_embedding, txt = next(dataloader)
 
         real_image = real_image.to(device)
         txt_embedding = txt_embedding.to(device)
