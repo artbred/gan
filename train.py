@@ -227,6 +227,22 @@ def train(args):
         for p, avg_p in zip(netG.parameters(), avg_param_G):
             avg_p.mul_(0.999).add_(0.001 * p.data)
 
+        ## 5. Contrastive learning
+        total_similarity = None
+        
+        for generated_image in fake_images:
+            for image in real_image:
+                similarity = torch.nn.functional.cosine_similarity(image_encoder(generated_image), image_encoder(image))
+                if total_similarity is None:
+                    total_similarity = similarity
+                else:
+                    total_similarity += similarity
+    
+        total_similarity /= batch_size * (batch_size / 2)
+        gamma = 0.2
+
+        g_loss_value = errG_total.detach() + gamma * total_similarity
+
         # if iteration % 100 == 0:
         #     print("GAN: loss d: %.5f    loss g: %.5f"%(err_dr, -errG_total.item()))
           
