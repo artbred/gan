@@ -177,7 +177,7 @@ def train(args):
         netD = nn.DataParallel(netD.to(device))
     
     for iteration in tqdm(range(current_iteration, total_iterations+1)):
-        real_image, txt_embedding, txt = next(dataloader)
+        real_image, txt_embedding, company_name = next(dataloader)
 
         real_image = real_image.to(device)
         txt_embedding = txt_embedding.to(device)
@@ -221,41 +221,45 @@ def train(args):
         kl_loss = KL_loss(mu, logvar)
         errG_total = err_g + kl_loss * kl_cf
 
+        ## Contrastive learning
+        # total_similarity = None
+        
+        # for generated_image in fake_images:
+        #     for image in real_image:
+        #         similarity = torch.nn.functional.cosine_similarity(image_encoder(generated_image), image_encoder(image))
+        #         if total_similarity is None:
+        #             total_similarity = similarity
+        #         else:
+        #             total_similarity += similarity
+    
+        # total_similarity /= batch_size * (batch_size / 2)
+        # gamma = 0.2
+
+        # g_loss_value = errG_total + gamma * total_similarity
+        # g_loss_value.backward()
+        ##
+
         errG_total.backward()
         optimizerG.step()
 
         for p, avg_p in zip(netG.parameters(), avg_param_G):
             avg_p.mul_(0.999).add_(0.001 * p.data)
 
-        ## 5. Contrastive learning
-        total_similarity = None
-        
-        for generated_image in fake_images:
-            for image in real_image:
-                similarity = torch.nn.functional.cosine_similarity(image_encoder(generated_image), image_encoder(image))
-                if total_similarity is None:
-                    total_similarity = similarity
-                else:
-                    total_similarity += similarity
-    
-        total_similarity /= batch_size * (batch_size / 2)
-        gamma = 0.2
-
-        g_loss_value = errG_total.detach() + gamma * total_similarity
 
         # if iteration % 100 == 0:
         #     print("GAN: loss d: %.5f    loss g: %.5f"%(err_dr, -errG_total.item()))
           
-        # if iteration % (save_interval*10) == 0:
-        #     backup_para = copy_G_params(netG)
-        #     load_params(netG, avg_param_G)
-        #     with torch.no_grad():
-        #         vutils.save_image(netG(fixed_noise)[0].add(1).mul(0.5), saved_image_folder+'/%d.jpg'%iteration, nrow=4)
-        #         vutils.save_image( torch.cat([
-        #                 F.interpolate(real_image, 128), 
-        #                 rec_img_all, rec_img_small,
-        #                 rec_img_part]).add(1).mul(0.5), saved_image_folder+'/rec_%d.jpg'%iteration )
-        #     load_params(netG, backup_para)
+        if iteration % (save_interval*10) == 0:
+            backup_para = copy_G_params(netG)
+            load_params(netG, avg_param_G)
+            with torch.no_grad():
+                fake, _, _ = netG(fixed_noise, txt_embedding)
+                vutils.save_image(fake[0].add(1).mul(0.5), saved_image_folder+f'/{company_name}@{iteration}.jpg', nrow=4)
+                # vutils.save_image( torch.cat([
+                #         F.interpolate(real_image, 128), 
+                #         rec_img_all, rec_img_small,
+                #         rec_img_part]).add(1).mul(0.5), saved_image_folder+'/rec_%d.jpg'%iteration )
+            load_params(netG, backup_para)
 
         if iteration % (save_interval*50) == 0 or iteration == total_iterations:
             backup_para = copy_G_params(netG)
